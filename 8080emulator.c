@@ -29,6 +29,9 @@ typedef struct State8080 {
 
 void SetFlags(ConditionCodes* cc, uint16_t answer);
 void SetFlagsNoCarry(ConditionCodes* cc, uint16_t answer);
+void CallAdr(State8080* state, const unsigned char *opcode);
+void CallConstantAdr(State8080* state, uint8_t adr);
+void Return(State8080* state);
 
 void UnimplementedInstruction(State8080* state)
 {
@@ -422,8 +425,15 @@ int Emulate8080Op(State8080* state)
         }
             break;
             /*...*/
+        case 0xc0:  // RNZ adr  (if NZ, RET)
+            if (state->cc.z == 0)
+                Return(state);
+            else
+                state->pc += 1;
+            break;
+            /*...*/
         case 0xc2:  // JNZ adr  (if NZ, PC <- adr)
-        // TODO: check how pc gets updated in disassembler for jumps (should only be handled here)
+        // TODO: check how pc gets updated in disassembler for jumps/call/return (should only be handled here)
             if (state->cc.z == 0)
                     state->pc = (opcode[2] << 8) | opcode[1];
             else
@@ -431,6 +441,11 @@ int Emulate8080Op(State8080* state)
             break;
         case 0xc3:  // JMP adr  (PC <- adr)
             state->pc = (opcode[2] << 8) | opcode[1];
+        case 0xc4:  // CNZ adr  (if NZ, CALL adr)
+            if (state->cc.z == 0)
+                CallAdr(state, opcode);
+            else
+                state->pc += 2;
             /*...*/
         case 0xc6:  // ADI D8 (A <- A + byte)
         {
@@ -438,6 +453,18 @@ int Emulate8080Op(State8080* state)
             SetFlags(&state->cc, answer);
             state->a = answer & 0xff;
         }
+            break;
+        case 0xc7:  // RST 0    (CALL $0)
+            CallConstantAdr(state, 0);
+            break;
+        case 0xc8:  // RZ adr  (if Z, RET)
+            if (state->cc.z)
+                Return(state);
+            else
+                state->pc += 1;
+            break;
+        case 0xc9:  // RET      (PC.lo <- (sp); PC.hi<-(sp+1); SP <- SP+2)
+            Return(state);
             break;
             /*...*/
         case 0xca:  // JZ adr   (if Z, PC <- adr)
@@ -447,6 +474,14 @@ int Emulate8080Op(State8080* state)
                 state->pc += 2;
             break;
             /*...*/
+        case 0xcc:  // CZ adr  (if Z, CALL adr)
+            if (state->cc.z)
+                CallAdr(state, opcode);
+            else
+                state->pc += 2;
+        case 0xcd:  // CALL adr ((SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP-2;PC=adr)
+            CallAdr(state, opcode);
+            break;
         case 0xce:  // ACI D8 (A <- A + data + CY)
         {
             uint16_t answer = (uint16_t) state->a + (uint16_t) opcode[1] + state->cc.cy;
@@ -454,10 +489,26 @@ int Emulate8080Op(State8080* state)
             state->a = answer & 0xff;
         }
             break;
+        case 0xcf:  // RST 1    (CALL $8)
+            CallConstantAdr(state, 8);
+            break;
+        case 0xd0:  // RNC adr  (if NCY, RET)
+            if (state->cc.cy == 0)
+                Return(state);
+            else
+                state->pc += 1;
+            break;
             /*...*/
         case 0xd2:  // JNC adr  (if NCY, PC <- adr)
             if (state->cc.cy == 0)
                 state->pc = (opcode[2] << 8) | opcode[1];
+            else
+                state->pc += 2;
+            break;
+            /*...*/
+        case 0xd4:  // CNC adr  (if NCY, CALL adr)
+            if (state->cc.cy == 0)
+                CallAdr(state, opcode);
             else
                 state->pc += 2;
             break;
@@ -469,12 +520,38 @@ int Emulate8080Op(State8080* state)
             state->a = answer & 0xff;
         }
             break;
+        case 0xd7:  // RST 2    (CALL $10)
+            CallConstantAdr(state, 10);
+            break;
+        case 0xd8:  // RC adr  (if CY, RET)
+            if (state->cc.cy)
+                Return(state);
+            else
+                state->pc += 1;
+            break;
             /*...*/
         case 0xda:  // JC adr  (if CY, PC <- adr)
             if (state->cc.cy)
                 state->pc = (opcode[2] << 8) | opcode[1];
             else
                 state->pc += 2;
+            break;
+            /*...*/
+        case 0xdc:  // CC adr  (if CY, CALL adr)
+            if (state->cc.cy)
+                CallAdr(state, opcode);
+            else
+                state->pc += 2;
+            break;
+            /*...*/
+        case 0xdf:  // RST 3    (CALL $18)
+            CallConstantAdr(state, 18);
+            break;
+        case 0xe0:  // RPO  (if PO, RET)
+            if (state->cc.p == 0)
+                Return(state);
+            else
+                state->pc += 1;
             break;
             /*...*/
         case 0xe2:  // JPO  (if PO, PC <- adr)
@@ -485,12 +562,48 @@ int Emulate8080Op(State8080* state)
                 state->pc += 2;
             break;
             /*...*/
+        case 0xe4:  // CPO adr  (if PO, CALL adr)
+            if (state->cc.p == 0)
+                CallAdr(state, opcode);
+            else
+                state->pc += 2;
+            break;
+            /*...*/
+        case 0xe7:  // RST 4    (CALL $20)
+            CallConstantAdr(state, 20);
+            break;
+        case 0xe8:  // RPE  (if PE, RET)
+            if (state->cc.p)
+                Return(state);
+            else
+                state->pc += 1;
+            break;
+        case 0xe9:  // PCHL (PC.hi <- H; PC.lo <- L)
+            state->pc = (state->h << 8) | state->l;
+            /*...*/
         case 0xea:  // JPE  (if PE, PC <- adr)
             // TODO: check if this and JPO aligns with parity correctly
             if (state->cc.p)
                 state->pc = (opcode[2] << 8) | opcode[1];
             else
                 state->pc += 2;
+            break;
+            /*...*/
+        case 0xec:  // CPE adr  (if PE, CALL adr)
+            if (state->cc.p)
+                CallAdr(state, opcode);
+            else
+                state->pc += 2;
+            break;
+            /*...*/
+        case 0xef:  // RST 5    (CALL $28)
+            CallConstantAdr(state, 28);
+            break;
+        case 0xf0:  // RP plus sign  (if P, RET)
+            if (state->cc.s == 0)
+                Return(state);
+            else
+                state->pc += 1;
             break;
             /*...*/
         case 0xf2:  // JP plus for sign (if P, PC <- adr)
@@ -500,6 +613,23 @@ int Emulate8080Op(State8080* state)
                 state->pc += 2;
             break;
             /*...*/
+        case 0xf4:  // CP adr plus sign  (if PO, CALL adr)
+            if (state->cc.s == 0)
+                CallAdr(state, opcode);
+            else
+                state->pc += 2;
+            break;
+            /*...*/
+        case 0xf7:  // RST 6    (CALL $30)
+            CallConstantAdr(state, 30);
+            break;
+        case 0xf8:  // RM minus sign  (if M, RET)
+            if (state->cc.s)
+                Return(state);
+            else
+                state->pc += 1;
+            break;
+            /*...*/
         case 0xfa:  // JM minus for sign (if M, PC <- adr)
             if (state->cc.s)
                 state->pc = (opcode[2] << 8) | opcode[1];
@@ -507,8 +637,17 @@ int Emulate8080Op(State8080* state)
                 state->pc += 2;
             break;
             /*...*/
+        case 0xfc:  // CM adr minus sign  (if M, CALL adr)
+            if (state->cc.s)
+                CallAdr(state, opcode);
+            else
+                state->pc += 2;
+            break;
+            /*...*/
         case 0xfe: UnimplementedInstruction(state); break;
-        case 0xff: UnimplementedInstruction(state); break;
+        case 0xff:  // RST 7    (CALL $38)
+            CallConstantAdr(state, 38);
+            break;
     }
     state->pc+=1;
 }
@@ -535,5 +674,32 @@ void SetFlagsNoCarry(ConditionCodes* cc, uint16_t answer)
     cc->p = Parity(answer&0xff);
 }
 
+void CallAdr(State8080* state, const unsigned char *opcode)
+{
+    // store return address on stack, then set pc to call address
+    // pc is 16bits, memory is 8 bits, so use 2 slots in stack
+    uint16_t ret = state->pc + 2;
+    state->memory[state->sp - 1] = (ret >> 8) & 0xff; // bits 8-15 stored in sp-1
+    state->memory[state->sp - 2] = (ret & 0xff);      // bits 0-7 stored in sp-2
+    state->sp -= 2;
+    state->pc = (opcode[2] << 8) | opcode[1];
+}
 
+void CallConstantAdr(State8080* state, uint8_t adr)
+{
+    // store return address on stack, then set pc to call address
+    // pc is 16bits, memory is 8 bits, so use 2 slots in stack
+    uint16_t ret = state->pc + 2;
+    state->memory[state->sp - 1] = (ret >> 8) & 0xff; // bits 8-15 stored in sp-1
+    state->memory[state->sp - 2] = (ret & 0xff);      // bits 0-7 stored in sp-2
+    state->sp -= 2;
+    state->pc = adr;
+}
 
+void Return(State8080* state)
+{
+    // Restore pc by popping return address off stack (16 bit adr gets stored in 2 slots)
+    //              bits 8-15                           bits 0-7
+    state->pc = (state->memory[state->sp+1] << 8) | state->memory[state->sp];
+    state->sp += 2;
+}
