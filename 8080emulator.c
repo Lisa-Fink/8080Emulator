@@ -478,7 +478,6 @@ int Emulate8080Op(State8080* state)
             state->a = answer & 0xff;
         }
             break;
-            /*...*/
         case 0xa0:  // ANA B   (A <-A & B)
             state->a &= state->b;
             SetFlagsNoCarry(&state->cc, state->a);
@@ -654,10 +653,14 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 1;
             break;
-        
-            /*...*/
+        case 0xc1:  // POP B    C <- (sp); B <- (sp+1); sp <- sp+2
+        {
+            state->c = state->memory[state->sp];
+            state->b = state->memory[state->sp+1];
+            state->sp += 2;
+        }
+            break;
         case 0xc2:  // JNZ adr  (if NZ, PC <- adr)
-        // TODO: check how pc gets updated in disassembler for jumps/call/return (should only be handled here)
             if (state->cc.z == 0)
                     state->pc = (opcode[2] << 8) | opcode[1];
             else
@@ -670,7 +673,13 @@ int Emulate8080Op(State8080* state)
                 CallAdr(state, opcode);
             else
                 state->pc += 2;
-            /*...*/
+        case 0xc5:  // PUSH B    (sp-2)<-C; (sp-1)<-B; sp <- sp - 2
+        {
+            state->memory[state->sp-1] = state->b;
+            state->memory[state->sp-2] = state->c;
+            state->sp = state->sp - 2;
+        }
+            break;
         case 0xc6:  // ADI D8 (A <- A + byte)
         {
             uint16_t answer = (uint16_t) state->a + (uint16_t) opcode[1];
@@ -690,14 +699,14 @@ int Emulate8080Op(State8080* state)
         case 0xc9:  // RET      (PC.lo <- (sp); PC.hi<-(sp+1); SP <- SP+2)
             Return(state);
             break;
-            /*...*/
         case 0xca:  // JZ adr   (if Z, PC <- adr)
             if (state->cc.z)
                 state->pc = (opcode[2] << 8) | opcode[1];
             else
                 state->pc += 2;
             break;
-            /*...*/
+        case 0xcb:  // NOP
+            break;
         case 0xcc:  // CZ adr  (if Z, CALL adr)
             if (state->cc.z)
                 CallAdr(state, opcode);
@@ -722,7 +731,12 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 1;
             break;
-            /*...*/
+        case 0xd1:  // POP D    E <- (sp); D <- (sp+1); sp <- sp+2
+        {
+            state->e = state->memory[state->sp];
+            state->d = state->memory[state->sp+1];
+            state->sp += 2;
+        }
         case 0xd2:  // JNC adr  (if NCY, PC <- adr)
             if (state->cc.cy == 0)
                 state->pc = (opcode[2] << 8) | opcode[1];
@@ -739,7 +753,13 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 2;
             break;
-            /*...*/
+        case 0xd5:  // PUSH D    (sp-2)<-E; (sp-1)<-D; sp <- sp - 2
+        {
+            state->memory[state->sp-1] = state->d;
+            state->memory[state->sp-2] = state->e;
+            state->sp = state->sp - 2;
+        }
+            break;
         case 0xd6:  // SUI D8 (A <- A - data)
         {
             uint16_t answer = (uint16_t) state->a - (uint16_t) opcode[1];
@@ -756,7 +776,8 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 1;
             break;
-            /*...*/
+        case 0xd9:  // NOP
+            break;
         case 0xda:  // JC adr  (if CY, PC <- adr)
             if (state->cc.cy)
                 state->pc = (opcode[2] << 8) | opcode[1];
@@ -773,7 +794,14 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 2;
             break;
-            /*...*/
+        case 0xde:  // SBI D8   A <- A - data - CY
+        {
+            uint16_t answer = (uint16_t) state->a - (uint16_t) opcode[1] - state->cc.cy;
+            SetFlags(&state->cc, answer);
+            state->a = answer & 0xff;
+            state->pc += 1;
+        }
+            break;
         case 0xdf:  // RST 3    (CALL $18)
             CallConstantAdr(state, 18);
             break;
@@ -783,7 +811,12 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 1;
             break;
-            /*...*/
+        case 0xe1:  // POP B    L <- (sp); H <- (sp+1); sp <- sp+2
+        {
+            state->l = state->memory[state->sp];
+            state->h = state->memory[state->sp+1];
+            state->sp += 2;
+        }
         case 0xe2:  // JPO  (if PO, PC <- adr)
         // TODO: check if this and JPE aligns with parity correctly
             if (state->cc.p == 0)
@@ -791,14 +824,30 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 2;
             break;
-            /*...*/
+        case 0xe3:  // XTHL 	L <-> (SP); H <-> (SP+1)
+        {
+            uint8_t temp = state->l;
+            state->l = state->memory[state->sp];
+            state->memory[state->sp] = temp;
+
+            temp = state->h;
+            state->h = state->memory[state->sp + 1];
+            state->memory[state->sp + 1] = temp;
+        }
+            break;
         case 0xe4:  // CPO adr  (if PO, CALL adr)
             if (state->cc.p == 0)
                 CallAdr(state, opcode);
             else
                 state->pc += 2;
             break;
-            /*...*/
+        case 0xe5:  // PUSH H    (sp-2)<-L; (sp-1)<-H; sp <- sp - 2
+        {
+            state->memory[state->sp-1] = state->h;
+            state->memory[state->sp-2] = state->l;
+            state->sp = state->sp - 2;
+        }
+            break;
         case 0xe6:  // ANI D8   (A <-A & data)
             state->a &= opcode[1];
             SetFlagsNoCarry(&state->cc, state->a);
@@ -816,7 +865,7 @@ int Emulate8080Op(State8080* state)
             break;
         case 0xe9:  // PCHL (PC.hi <- H; PC.lo <- L)
             state->pc = (state->h << 8) | state->l;
-            /*...*/
+            break;
         case 0xea:  // JPE  (if PE, PC <- adr)
             // TODO: check if this and JPO aligns with parity correctly
             if (state->cc.p)
@@ -841,7 +890,19 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 1;
             break;
-            /*...*/
+        case 0xf1:  // POP PSW   flags <- (sp); A <- (sp+1); sp <- sp+2
+        {
+            state->a = state->memory[state->sp+1];
+            // Low 5 bits store each flag ac-cy-p-s-z
+            uint8_t psw = state->memory[state->sp];
+            state->cc.z  = (0x01 == (psw & 0x01));
+            state->cc.s  = (0x02 == (psw & 0x02));
+            state->cc.p  = (0x04 == (psw & 0x04));
+            state->cc.cy = (0x08 == (psw & 0x08));
+            state->cc.ac = (0x10 == (psw & 0x10));
+            state->sp += 2;
+        }
+            break;
         case 0xf2:  // JP plus for sign (if P, PC <- adr)
             if (state->cc.s == 0)
                 state->pc = (opcode[2] << 8) | opcode[1];
@@ -857,6 +918,19 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 2;
             break;
+        case 0xf5:  // PUSH PSW  (sp-2)<-flags; (sp-1)<-A; sp <- sp - 2
+        {
+            state->memory[state->sp-1] = state->a;
+            // Low 5 bits store each flag ac-cy-p-s-z
+            uint8_t psw = (state->cc.z |
+                           state->cc.s << 1 |
+                           state->cc.p << 2 |
+                           state->cc.cy << 3 |
+                           state->cc.ac << 4 );
+            state->sp -= 2;
+            state->memory[state->sp] = psw;
+        }
+            break;
             /*...*/
         case 0xf7:  // RST 6    (CALL $30)
             CallConstantAdr(state, 30);
@@ -867,7 +941,9 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 1;
             break;
-            /*...*/
+        case 0xf9:  // SPHL SP=HL
+            state->sp = (state->h << 8) | state->l;
+            break;
         case 0xfa:  // JM minus for sign (if M, PC <- adr)
             if (state->cc.s)
                 state->pc = (opcode[2] << 8) | opcode[1];
