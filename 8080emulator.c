@@ -68,6 +68,15 @@ int Emulate8080Op(State8080* state)
             SetFlagsNoCarry(&state->cc, state->b);
             break;
             /*....*/
+        case 0x07:  // RLC  	A = A << 1; bit 0 = prev bit 7; CY = prev bit 7
+        {
+            uint8_t a = state->a;
+            // bit 7 wraps around to bit 0, everything else goes left
+            state->a = ((a & 0x80) >> 7) | (a << 1);
+            state->cc.cy = a & 0x80;
+        }
+            break;
+            /*....*/
         case 0x09:  // DAD B    HL = HL + BC
         {
             uint32_t hl = (state->h<<8) | (state->l);
@@ -92,6 +101,15 @@ int Emulate8080Op(State8080* state)
             SetFlagsNoCarry(&state->cc, state->c);
             break;
             /*....*/
+        case 0x0f:  // RRC      A = A >> 1; bit 7 = prev bit 0; CY = prev bit 0
+        {
+            uint8_t a = state->a;
+            // bit 0 wraps around to bit 7, everything else goes right
+            state->a = ((a & 1) << 7) | (a >> 1);
+            state->cc.cy = a & 1;
+        }
+            break;
+            /*....*/
         case 0x13:  // INX D 	DE <- DE+1
             state->e++;
             if (state->e == 0) state->d++;
@@ -103,6 +121,15 @@ int Emulate8080Op(State8080* state)
         case 0x15:  // DCR D    D <- D-1
             state->d--;
             SetFlagsNoCarry(&state->cc, state->d);
+            break;
+            /*....*/
+        case 0x17:  // RAL  	A = A << 1; bit 0 = prev CY; CY = prev bit 7
+        {
+            uint8_t a = state->a;
+            // bit 0 is prev carry, everything else goes left
+            state->a = ((state->cc.cy) >> 7) | (a << 1);
+            state->cc.cy = a & 0x80;
+        }
             break;
             /*....*/
         case 0x19:  // DAD B    HL = HL + DE
@@ -128,7 +155,16 @@ int Emulate8080Op(State8080* state)
             state->e--;
             SetFlagsNoCarry(&state->cc, state->e);
             break;
-            /*....*/ 
+            /*....*/
+        case 0x1f:  // RAR      A = A >> 1; bit 7 = prev bit 7; CY = prev bit 0
+        // TODO: double check this, example uses carry but instruction says prev bit 7
+        {
+            uint8_t a = state->a;
+            state->a = (a & 0x80) | (a >> 1);
+            state->cc.cy = a & 1;
+        }
+            break;
+            /*....*/
         case 0x23:  // INX H 	HL <- HL+1
             state->l++;
             if (state->l == 0) state->h++;
@@ -167,9 +203,16 @@ int Emulate8080Op(State8080* state)
             SetFlagsNoCarry(&state->cc, state->l);
             break;
             /*....*/
+        case 0x2f:  // CMA  not  (A<-!A)
+            state->a = ~state->a;
+            break;
+            /*....*/
         case 0x33:  // INX SP   SP = SP + 1
             state->sp++;
             break;
+            /*....*/
+        case 0x37:  // STC      CY = 1
+            state->cc.cy = 1;
             /*....*/
         case 0x39:  // DAD SP   HL = HL + SP
         {
@@ -190,6 +233,10 @@ int Emulate8080Op(State8080* state)
         case 0x3d:  // DCR A    A <- A-1
             state->a--;
             SetFlagsNoCarry(&state->cc, state->a);
+            break;
+            /*....*/
+        case 0x3f:  // CMC  not  (CY<-!CY)
+            state->cc.cy = ~state->cc.cy;
             break;
             /*....*/
         case 0x80:  // ADD B
@@ -425,12 +472,182 @@ int Emulate8080Op(State8080* state)
         }
             break;
             /*...*/
+        case 0xa0:  // ANA B   (A <-A & B)
+            state->a &= state->b;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;   // AND always clears CY
+            break;
+        case 0xa1:  // ANA C   (A <-A & C)
+            state->a &= state->c;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xa2:  // ANA D   (A <-A & D)
+            state->a &= state->d;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xa3:  // ANA E   (A <-A & E)
+            state->a &= state->e;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xa4:  // ANA H   (A <-A & H)
+            state->a &= state->h;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xa5:  // ANA L   (A <-A & L)
+            state->a &= state->l;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xa6:  // ANA M   (A <-A & (HL))
+        {
+            uint16_t address = (state->h << 8) | (state->l);  // concat h and l
+            state->a &= state->memory[address];
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+        }
+            break;
+        case 0xa7:  // ANA A   (A <-A & A)
+            // Don't need to update A because A & A doesn't change A
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xa8:  // XRA B   (A <-A ^ B)
+            state->a ^= state->b;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;   // AND always clears CY
+            break;
+        case 0xa9:  // XRA C   (A <-A ^ C)
+            state->a ^= state->c;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xaa:  // XRA D   (A <-A ^ D)
+            state->a ^= state->d;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xab:  // XRA E   (A <-A ^ E)
+            state->a ^= state->e;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xac:  // XRA H   (A <-A ^ H)
+            state->a ^= state->h;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xad:  // XRA L   (A <-A ^ L)
+            state->a ^= state->l;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xae:  // XRA M   (A <-A ^ (HL))
+        {
+            uint16_t address = (state->h << 8) | (state->l);  // concat h and l
+            state->a ^= state->memory[address];
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+        }
+            break;
+        case 0xaf:  // XRA A   (A <-A ^ A)
+            state->a = 0;   // xor itself is always 0
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xb0:  // ORA B   (A <-A | B)
+            state->a |= state->b;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;   // AND always clears CY
+            break;
+        case 0xb1:  // ORA C   (A <-A | C)
+            state->a |= state->c;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xb2:  // ORA D   (A <-A | D)
+            state->a |= state->d;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xb3:  // ORA E   (A <-A | E)
+            state->a |= state->e;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xb4:  // ORA H   (A <-A | H)
+            state->a |= state->h;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xb5:  // ORA L   (A <-A | L)
+            state->a |= state->l;
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xb6:  // ORA M   (A <-A | (HL))
+        {
+            uint16_t address = (state->h << 8) | (state->l);  // concat h and l
+            state->a |= state->memory[address];
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+        }
+            break;
+        case 0xb7:  // ORA A   (A <-A | A)
+            // Don't need to update A because A | A doesn't change A
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;
+            break;
+        case 0xb8:  // CMP B    (A - B)
+        {
+            uint16_t answer = (uint16_t) state->a - (uint16_t) state->b;
+            SetFlags(&state->cc, answer);
+        }
+        case 0xb9:  // CMP C    (A - C)
+        {
+            uint16_t answer = (uint16_t) state->a - (uint16_t) state->c;
+            SetFlags(&state->cc, answer);
+        }
+        case 0xba:  // CMP D    (A - D)
+        {
+            uint16_t answer = (uint16_t) state->a - (uint16_t) state->d;
+            SetFlags(&state->cc, answer);
+        }
+        case 0xbb:  // CMP E    (A - E)
+        {
+            uint16_t answer = (uint16_t) state->a - (uint16_t) state->e;
+            SetFlags(&state->cc, answer);
+        }
+        case 0xbc:  // CMP H    (A - H)
+        {
+            uint16_t answer = (uint16_t) state->a - (uint16_t) state->h;
+            SetFlags(&state->cc, answer);
+        }
+        case 0xbd:  // CMP L    (A - L)
+        {
+            uint16_t answer = (uint16_t) state->a - (uint16_t) state->l;
+            SetFlags(&state->cc, answer);
+        }
+        case 0xbe:  // CMP M    (A - (HL))
+        {
+            uint16_t address = (state->h << 8) | (state->l);  // concat h and l
+            uint16_t answer = (uint16_t) state->a - (uint16_t) state->memory[address];
+            SetFlags(&state->cc, answer);
+        }
+        case 0xbf:  // CMP A    (A - A)
+        {
+            SetFlags(&state->cc, 0);    // A - A is always 0
+        }
         case 0xc0:  // RNZ adr  (if NZ, RET)
             if (state->cc.z == 0)
                 Return(state);
             else
                 state->pc += 1;
             break;
+        
             /*...*/
         case 0xc2:  // JNZ adr  (if NZ, PC <- adr)
         // TODO: check how pc gets updated in disassembler for jumps/call/return (should only be handled here)
@@ -569,6 +786,12 @@ int Emulate8080Op(State8080* state)
                 state->pc += 2;
             break;
             /*...*/
+        case 0xe6:  // ANI D8   (A <-A & data)
+            state->a &= opcode[1];
+            SetFlagsNoCarry(&state->cc, state->a);
+            state->cc.cy = 0;   // ANI always clears CY
+            state->pc++;
+            break;
         case 0xe7:  // RST 4    (CALL $20)
             CallConstantAdr(state, 20);
             break;
@@ -644,7 +867,12 @@ int Emulate8080Op(State8080* state)
                 state->pc += 2;
             break;
             /*...*/
-        case 0xfe: UnimplementedInstruction(state); break;
+        case 0xfe:  // CPI D8   (A - data)
+        {
+            uint16_t answer = (uint16_t) state->a - (uint16_t) opcode[1];
+            SetFlags(&state->cc, answer);
+            state->pc++;
+        }
         case 0xff:  // RST 7    (CALL $38)
             CallConstantAdr(state, 38);
             break;
