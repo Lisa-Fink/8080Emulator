@@ -422,13 +422,15 @@ int Emulate8080Op(State8080* state)
         }
             break;
             /*...*/
-        case 0xc3:  // ACI D8 (A <- A + data + CY)
-        {
-            uint16_t answer = (uint16_t) state->a + (uint16_t) opcode[1] + state->cc.cy;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+        case 0xc2:  // JNZ adr  (if NZ, PC <- adr)
+        // TODO: check how pc gets updated in disassembler for jumps (should only be handled here)
+            if (state->cc.z == 0)
+                    state->pc = (opcode[2] << 8) | opcode[1];
+            else
+                state->pc += 2;
             break;
+        case 0xc3:  // JMP adr  (PC <- adr)
+            state->pc = (opcode[2] << 8) | opcode[1];
             /*...*/
         case 0xc6:  // ADI D8 (A <- A + byte)
         {
@@ -438,6 +440,27 @@ int Emulate8080Op(State8080* state)
         }
             break;
             /*...*/
+        case 0xca:  // JZ adr   (if Z, PC <- adr)
+            if (state->cc.z)
+                state->pc = (opcode[2] << 8) | opcode[1];
+            else
+                state->pc += 2;
+            break;
+            /*...*/
+        case 0xce:  // ACI D8 (A <- A + data + CY)
+        {
+            uint16_t answer = (uint16_t) state->a + (uint16_t) opcode[1] + state->cc.cy;
+            SetFlags(&state->cc, answer);
+            state->a = answer & 0xff;
+        }
+            break;
+            /*...*/
+        case 0xd2:  // JNC adr  (if NCY, PC <- adr)
+            if (state->cc.cy == 0)
+                state->pc = (opcode[2] << 8) | opcode[1];
+            else
+                state->pc += 2;
+            break;
             /*...*/
         case 0xd6:  // SUI D8 (A <- A - data)
         {
@@ -445,6 +468,43 @@ int Emulate8080Op(State8080* state)
             SetFlags(&state->cc, answer);
             state->a = answer & 0xff;
         }
+            break;
+            /*...*/
+        case 0xda:  // JC adr  (if CY, PC <- adr)
+            if (state->cc.cy)
+                state->pc = (opcode[2] << 8) | opcode[1];
+            else
+                state->pc += 2;
+            break;
+            /*...*/
+        case 0xe2:  // JPO  (if PO, PC <- adr)
+        // TODO: check if this and JPE aligns with parity correctly
+            if (state->cc.p == 0)
+                state->pc = (opcode[2] << 8) | opcode[1];
+            else
+                state->pc += 2;
+            break;
+            /*...*/
+        case 0xea:  // JPE  (if PE, PC <- adr)
+            // TODO: check if this and JPO aligns with parity correctly
+            if (state->cc.p)
+                state->pc = (opcode[2] << 8) | opcode[1];
+            else
+                state->pc += 2;
+            break;
+            /*...*/
+        case 0xf2:  // JP plus for sign (if P, PC <- adr)
+            if (state->cc.s == 0)
+                state->pc = (opcode[2] << 8) | opcode[1];
+            else
+                state->pc += 2;
+            break;
+            /*...*/
+        case 0xfa:  // JM minus for sign (if M, PC <- adr)
+            if (state->cc.s)
+                state->pc = (opcode[2] << 8) | opcode[1];
+            else
+                state->pc += 2;
             break;
             /*...*/
         case 0xfe: UnimplementedInstruction(state); break;
