@@ -178,6 +178,10 @@ int Emulate8080Op(State8080* state)
             SetFlagsNoCarry(&state->cc, state->h);
             break;
             /*....*/
+        case 0x27:  // DAA special
+            // TODO: lookup?
+            break;
+            /*....*/
         case 0x29:  // DAD H    HL = HL + HL?
         {
             uint32_t hl = (state->h<<8) | (state->l);
@@ -238,6 +242,9 @@ int Emulate8080Op(State8080* state)
         case 0x3f:  // CMC  not  (CY<-!CY)
             state->cc.cy = ~state->cc.cy;
             break;
+            /*....*/
+        case 0x76:  // HLT special
+            exit(0);
             /*....*/
         case 0x80:  // ADD B
         {
@@ -722,7 +729,10 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 2;
             break;
-            /*...*/
+        case 0xd3:  // OUT D8    special
+            // TODO: implement this later
+            state->pc++;
+            break;
         case 0xd4:  // CNC adr  (if NCY, CALL adr)
             if (state->cc.cy == 0)
                 CallAdr(state, opcode);
@@ -753,7 +763,10 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 2;
             break;
-            /*...*/
+        case 0xdb:  // IN D8    special
+            // TODO: implement this later
+            state->pc++;
+            break;
         case 0xdc:  // CC adr  (if CY, CALL adr)
             if (state->cc.cy)
                 CallAdr(state, opcode);
@@ -835,7 +848,9 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 2;
             break;
-            /*...*/
+        case 0xf3:  // DI   special disable interrupt
+            state->int_enable = 0;
+            break;
         case 0xf4:  // CP adr plus sign  (if PO, CALL adr)
             if (state->cc.s == 0)
                 CallAdr(state, opcode);
@@ -859,7 +874,9 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 2;
             break;
-            /*...*/
+        case 0xfb:  // EI   special enable interrupt
+            state->int_enable = 1;
+            break;
         case 0xfc:  // CM adr minus sign  (if M, CALL adr)
             if (state->cc.s)
                 CallAdr(state, opcode);
@@ -872,6 +889,7 @@ int Emulate8080Op(State8080* state)
             uint16_t answer = (uint16_t) state->a - (uint16_t) opcode[1];
             SetFlags(&state->cc, answer);
             state->pc++;
+            break;
         }
         case 0xff:  // RST 7    (CALL $38)
             CallConstantAdr(state, 38);
