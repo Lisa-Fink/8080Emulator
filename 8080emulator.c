@@ -29,11 +29,11 @@ typedef struct State8080 {
 } State8080;
 
 void SetFlags(ConditionCodes* cc, uint16_t answer);
-void SetFlagsSubtraction(ConditionCodes* cc, uint16_t answer);
 void SetFlagsNoCarry(ConditionCodes* cc, uint16_t answer);
 void CallAdr(State8080* state, const unsigned char *opcode);
 void CallConstantAdr(State8080* state, uint8_t adr);
 void Return(State8080* state);
+void SBB_Register(uint8_t register_val, State8080* state);
 
 void UnimplementedInstruction(State8080* state)
 {
@@ -719,119 +719,88 @@ int Emulate8080Op(State8080* state)
             break;
         case 0x90:  // SUB B
         {
-            // store result in 16 bit answer to check for carry
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->b;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;   // remove extra 8 bits
+            state->cc.cy = state->a < state->b;
+            state->a  -= state->b;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x91:  // SUB C
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->c;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = state->a < state->c;
+            state->a  -= state->c;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x92:  // SUB D
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->d;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = state->a < state->d;
+            state->a  -= state->d;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x93:  // SUB E
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->e;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = state->a < state->e;
+            state->a  -= state->e;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x94:  // SUB H
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->h;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = state->a < state->h;
+            state->a  -= state->h;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x95:  // SUB L
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->l;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = state->a < state->l;
+            state->a  -= state->l;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x96:  // SUB M
         {
             // M is the byte pointed to by SUBress stored in HL
-            uint16_t SUBress = (state->h<<8) | (state->l);  // concat h and l
-            uint16_t answer = (uint16_t) state->a - state->memory[SUBress];
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
+            uint16_t address = (state->h<<8) | (state->l);  // concat h and l
+            state->cc.cy = state->a < state->memory[address];
+            state->a  -= state->memory[address];
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x97:  // SUB A
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->a;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = 0;
+            state->a  -= state->a;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
-        case 0x98:  // 	SBB B
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->b - state->cc.cy;;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+        case 0x98:  // SBB B
+            SBB_Register(state->b, state);
             break;
-        case 0x99:   // SBB C
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->c - state->cc.cy;;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+        case 0x99:  // SBB C
+            SBB_Register(state->c, state);
             break;
-        case 0x9a:   // SBB D
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->d - state->cc.cy;;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+        case 0x9a:  // SBB D
+            SBB_Register(state->d, state);
             break;
         case 0x9b:  // SBB E
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->e - state->cc.cy;;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+            SBB_Register(state->e, state);
             break;
         case 0x9c:  // SBB H
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->h - state->cc.cy;;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+            SBB_Register(state->h, state);
             break;
         case 0x9d:  // SBB L
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->l - state->cc.cy;;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+            SBB_Register(state->l, state);
             break;
         case 0x9e:  // SBB M
         {
-            uint16_t address = (state->h<<8) | (state->l);  // concat h and l
-            uint16_t answer = (uint16_t) state->a - state->memory[address] - state->cc.cy;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
+            uint16_t address = (state->h << 8) | state->l;  // Memory address
+            SBB_Register(state->memory[address], state);
         }
             break;
         case 0x9f:  // SBB A
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->a - state->cc.cy;
-            SetFlagsSubtraction(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+            SBB_Register(state->a, state);
             break;
         case 0xa0:  // ANA B   (A <-A & B)
             state->a &= state->b;
@@ -964,49 +933,50 @@ int Emulate8080Op(State8080* state)
             break;
         case 0xb8:  // CMP B    (A - B)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->b;
-            SetFlagsSubtraction(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->b);
+            state->cc.cy = state->a < state->b;
         }
             break;
         case 0xb9:  // CMP C    (A - C)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->c;
-            SetFlagsSubtraction(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->c);
+            state->cc.cy = state->a < state->c;
         }
             break;
         case 0xba:  // CMP D    (A - D)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->d;
-            SetFlagsSubtraction(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->d);
+            state->cc.cy = state->a < state->d;
         }
             break;
         case 0xbb:  // CMP E    (A - E)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->e;
-            SetFlagsSubtraction(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->e);
+            state->cc.cy = state->a < state->e;
         }
             break;
         case 0xbc:  // CMP H    (A - H)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->h;
-            SetFlagsSubtraction(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->h);
+            state->cc.cy = state->a < state->h;
         }
             break;
         case 0xbd:  // CMP L    (A - L)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->l;
-            SetFlagsSubtraction(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->l);
+            state->cc.cy = state->a < state->l;
         }
             break;
         case 0xbe:  // CMP M    (A - (HL))
         {
             uint16_t address = (state->h << 8) | (state->l);  // concat h and l
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->memory[address];
-            SetFlagsSubtraction(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->memory[address]);
+            state->cc.cy = state->a < state->memory[address];
         }
             break;
         case 0xbf:  // CMP A    (A - A)
-            SetFlagsSubtraction(&state->cc, 0);    // A - A is always 0
+            SetFlagsNoCarry(&state->cc, 0);    // A - A is always 0
+            state->cc.cy = 0;
             break;
         case 0xc0:  // RNZ adr  (if NZ, RET)
             if (state->cc.z == 0)
@@ -1087,6 +1057,7 @@ int Emulate8080Op(State8080* state)
                     while (*str != '$')
                         printf("%c", *str++);
                     printf("\n");
+                    exit(0);
                 }
                 else if (state->c == 2)
                 {
@@ -1407,15 +1378,6 @@ void SetFlags(ConditionCodes* cc, uint16_t answer)
     cc->cy = (answer > 0xff);       // carry: check if it overflowed over 8 bits
 }
 
-void SetFlagsSubtraction(ConditionCodes* cc, uint16_t answer)
-{
-    // update flags Z, S, P, CY, AC (skip AC because Space Invaders doesn't use it)
-    cc->z = ((answer & 0xff) == 0); // zero: check lowest 8 bits equals 0
-    cc->s = ((answer & 0x80) != 0); // sign: check bit 7 0x80 = 0b1000 0000
-    cc->p = Parity(answer&0xff);
-    cc->cy = (answer <= 0xff);       // carry: check if it overflowed over 8 bits
-}
-
 void SetFlagsNoCarry(ConditionCodes* cc, uint16_t answer)
 {
     // update flags Z, S, P, CY, AC (skip AC because Space Invaders doesn't use it)
@@ -1469,6 +1431,14 @@ void ReadFileMem(State8080* state, char* filename, uint32_t mem_address)
     uint8_t *buffer = &state->memory[mem_address];
     fread(buffer, file_size, 1, f);
     fclose(f);
+}
+
+void SBB_Register(uint8_t register_val, State8080* state)
+{
+    uint8_t new_carry = state->a < (register_val + state->cc.cy);
+    state->a  -= register_val + state->cc.cy;
+    state->cc.cy = new_carry;
+    SetFlagsNoCarry(&state->cc, state->a);
 }
 
 int main (int argc, char**argv)
