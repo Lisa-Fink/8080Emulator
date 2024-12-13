@@ -1039,6 +1039,7 @@ int Emulate8080Op(State8080* state)
             uint16_t answer = (uint16_t) state->a + (uint16_t) opcode[1];
             SetFlags(&state->cc, answer);
             state->a = answer & 0xff;
+            state->pc++;
         }
             break;
         case 0xc7:  // RST 0    (CALL $0)
@@ -1075,6 +1076,7 @@ int Emulate8080Op(State8080* state)
             uint16_t answer = (uint16_t) state->a + (uint16_t) opcode[1] + state->cc.cy;
             SetFlags(&state->cc, answer);
             state->a = answer & 0xff;
+            state->pc++;
         }
             break;
         case 0xcf:  // RST 1    (CALL $8)
@@ -1121,6 +1123,7 @@ int Emulate8080Op(State8080* state)
             uint16_t answer = (uint16_t) state->a - (uint16_t) opcode[1];
             SetFlags(&state->cc, answer);
             state->a = answer & 0xff;
+            state->pc++;
         }
             break;
         case 0xd7:  // RST 2    (CALL $10)
@@ -1157,7 +1160,7 @@ int Emulate8080Op(State8080* state)
             uint16_t answer = (uint16_t) state->a - (uint16_t) opcode[1] - state->cc.cy;
             SetFlags(&state->cc, answer);
             state->a = answer & 0xff;
-            state->pc += 1;
+            state->pc++;
         }
             break;
         case 0xdf:  // RST 3    (CALL $18)
