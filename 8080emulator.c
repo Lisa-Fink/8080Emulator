@@ -1,32 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include "Disassembler/disassembler.h"
+#include "8080emulator.h"
 
 
-typedef struct ConditionCodes {
-    uint8_t    z:1;
-    uint8_t    s:1;
-    uint8_t    p:1;
-    uint8_t    cy:1;
-    uint8_t    ac:1;
-    uint8_t    pad:3;
-} ConditionCodes;
-
-typedef struct State8080 {
-    uint8_t    a;
-    uint8_t    b;
-    uint8_t    c;
-    uint8_t    d;
-    uint8_t    e;
-    uint8_t    h;
-    uint8_t    l;
-    uint16_t    sp;
-    uint16_t    pc;
-    uint8_t     *memory;
-    struct      ConditionCodes      cc;
-    uint8_t     int_enable;
-} State8080;
 
 void SetFlags(ConditionCodes* cc, uint16_t answer);
 void SetFlagsNoCarry(ConditionCodes* cc, uint16_t answer);
@@ -1045,40 +1022,6 @@ int Emulate8080Op(State8080* state)
         case 0xcd:  // CALL adr ((SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP-2;PC=adr)
             CallAdr(state, opcode);
             break;
-//            CALL for cpu diag test
-//        case 0xcd:                      //CALL address
-//
-//            if (5 ==  ((opcode[2] << 8) | opcode[1]))
-//            {
-//                if (state->c == 9)
-//                {
-//                    uint16_t offset = (state->d<<8) | (state->e);
-//                    char *str = &state->memory[offset+3];  //skip the prefix bytes
-//                    while (*str != '$')
-//                        printf("%c", *str++);
-//                    printf("\n");
-//                    exit(0);
-//                }
-//                else if (state->c == 2)
-//                {
-//                    //saw this in the inspected code, never saw it called
-//                    printf ("print char routine called\n");
-//                }
-//            }
-//            else if (0 ==  ((opcode[2] << 8) | opcode[1]))
-//            {
-//                exit(0);
-//            }
-//            else
-//
-//        {
-//            uint16_t    ret = state->pc+2;
-//            state->memory[state->sp-1] = (ret >> 8) & 0xff;
-//            state->memory[state->sp-2] = (ret & 0xff);
-//            state->sp = state->sp - 2;
-//            state->pc = (opcode[2] << 8) | opcode[1];
-//        }
-//            break;
         case 0xce:  // ACI D8 (A <- A + data + CY)
         {
             uint16_t answer = (uint16_t) state->a + (uint16_t) opcode[1] + state->cc.cy;
@@ -1414,77 +1357,10 @@ void Return(State8080* state)
     state->sp += 2;
 }
 
-void ReadFileMem(State8080* state, char* filename, uint32_t mem_address)
-{
-    FILE *f= fopen(filename, "rb");
-    if (f==NULL)
-    {
-        printf("error: Couldn't open %s\n", filename);
-        exit(1);
-    }
-    fseek(f, 0L, SEEK_END);
-    int file_size = ftell(f);
-    fseek(f, 0L, SEEK_SET);
-
-    uint8_t *buffer = &state->memory[mem_address];
-    fread(buffer, file_size, 1, f);
-    fclose(f);
-}
-
 void SBB_Register(uint8_t register_val, State8080* state)
 {
     uint8_t new_carry = state->a < (register_val + state->cc.cy);
     state->a  -= register_val + state->cc.cy;
     state->cc.cy = new_carry;
     SetFlagsNoCarry(&state->cc, state->a);
-}
-
-int main (int argc, char**argv)
-{
-    // Initialize states
-    State8080* state = calloc(1, sizeof(State8080));
-    state->memory = malloc(0x10000);  // 16K
-
-    // Read files into state[memory]
-    ReadFileMem(state, "../Rom/invaders.h", 0);
-    ReadFileMem(state, "../Rom/invaders.g", 0x800);
-    ReadFileMem(state, "../Rom/invaders.f", 0x1000);
-    ReadFileMem(state, "../Rom/invaders.e", 0x1800);
-
-    // CPUdiag test setup
-//    ReadFileMem(state, "../Rom/Test/cpudiag.bin", 0x100);
-//
-//    //Fix the first instruction to be JMP 0x100
-//    state->memory[0]=0xc3;
-//    state->memory[1]=0;
-//    state->memory[2]=0x01;
-//
-//    //Fix the stack pointer from 0x6ad to 0x7ad
-//    // this 0x06 byte 112 in the code, which is
-//    // byte 112 + 0x100 = 368 in memory
-//    state->memory[368] = 0x7;
-//
-//    //Skip DAA test
-//    state->memory[0x59c] = 0xc3; //JMP
-//    state->memory[0x59d] = 0xc2;
-//    state->memory[0x59e] = 0x05;
-    int line = 0;
-//    while (state->pc < 0x2000)
-    while (line < 50000)
-    {
-        Emulate8080Op(state);
-        // Print for debugging
-        printf("\t");
-        printf("%c", state->cc.z ? 'z' : '.');
-        printf("%c", state->cc.s ? 's' : '.');
-        printf("%c", state->cc.p ? 'p' : '.');
-        printf("%c", state->cc.cy ? 'c' : '.');
-        printf("%c  ", state->cc.ac ? 'a' : '.');
-        printf("PC $%02x ", state->pc);
-        printf("A $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n", state->a, state->b, state->c,
-               state->d, state->e, state->h, state->l, state->sp);
-        fflush(stdout);
-        line++;
-    }
-    return 0;
 }
