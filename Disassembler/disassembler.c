@@ -7,35 +7,35 @@ https://github.com/kpmiller/emulator101/blob/master/8080emu-first50.c#L360
 #include <stdio.h>
 #include <stdlib.h>
 
-int Disassemble8080p(unsigned char *code_buffer, int pc);
+//int Disassemble8080Op(unsigned char *code_buffer, int pc);
 
-int main (int argc, char**argv)
-{
-    FILE *file = fopen(argv[1], "rb");
-    if (file == NULL)
-    {
-        printf("error: Couldn't open %s\n", argv[1]);
-        exit(1);
-    }
+//int main (int argc, char**argv)
+//{
+//    FILE *file = fopen(argv[1], "rb");
+//    if (file == NULL)
+//    {
+//        printf("error: Couldn't open %s\n", argv[1]);
+//        exit(1);
+//    }
+//
+//    fseek(file, 0L, SEEK_END); // Go to end of file to get size
+//    int file_size = ftell(file);
+//    fseek(file, 0L, SEEK_SET);  // Go back to start
+//
+//    unsigned char *buffer = malloc(file_size);
+//    fread(buffer, file_size, 1, file);  // Reads the file into the buffer
+//    fclose(file);
+//
+//    int pc = 0;
+//
+//    while (pc < file_size)
+//    {
+//        pc += Disassemble8080Op(buffer, pc);
+//    }
+//    return 0;
+//}
 
-    fseek(file, 0L, SEEK_END); // Go to end of file to get size
-    int file_size = ftell(file);
-    fseek(file, 0L, SEEK_SET);  // Go back to start
-
-    unsigned char *buffer = malloc(file_size);
-    fread(buffer, file_size, 1, file);  // Reads the file into the buffer
-    fclose(file);
-
-    int pc = 0;
-
-    while (pc < file_size)
-    {
-        pc += Disassemble8080p(buffer, pc);
-    }
-    return 0;
-}
-
-int Disassemble8080p(unsigned char *code_buffer, int pc)
+int Disassemble8080Op(unsigned char *code_buffer, int pc)
 {
     unsigned char *code = &code_buffer[pc];
     int op_bytes = 1;
@@ -314,6 +314,6 @@ int Disassemble8080p(unsigned char *code_buffer, int pc)
         case 0xfe: printf("CPI    #$%02x",code[1]); op_bytes = 2; break;
         case 0xff: printf("RST    7"); break;
     }
-    printf("\n");
+//    printf("\n");
     return op_bytes;
 }

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include "Disassembler/disassembler.h"
 
 
 typedef struct ConditionCodes {
@@ -43,6 +44,13 @@ void UnimplementedInstruction(State8080* state)
 int Emulate8080Op(State8080* state)
 {
     unsigned char *opcode = &state->memory[state->pc];
+
+    Disassemble8080Op(state->memory, state->pc);
+
+    // default inc pc
+    // do this BEFORE processing
+    // some operations will set pc, so pc shouldn't get changed after that
+    state->pc+=1;
 
     switch(*opcode) {
         case 0x00:  // NOP
@@ -1356,23 +1364,19 @@ int Emulate8080Op(State8080* state)
             CallConstantAdr(state, 38);
             break;
     }
-    state->pc+=1;
-
-    // Print for debugging
-    printf("\t");
-    printf("%c", state->cc.z ? 'z' : '.');
-    printf("%c", state->cc.s ? 's' : '.');
-    printf("%c", state->cc.p ? 'p' : '.');
-    printf("%c", state->cc.cy ? 'c' : '.');
-    printf("%c  ", state->cc.ac ? 'a' : '.');
-    printf("A $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n", state->a, state->b, state->c,
-           state->d, state->e, state->h, state->l, state->sp);
     return 0;
 }
 
 uint8_t Parity(uint8_t answer)
 {
-    return 0;
+    int i;
+    int count = 0;
+    for (i = 0; i < 8; i++)
+    {
+        if (answer & 0x1) count++;
+        answer >>= 1;
+    }
+    return (count & 0x1) == 0;
 }
 
 void SetFlags(ConditionCodes* cc, uint16_t answer)
@@ -1446,14 +1450,30 @@ int main (int argc, char**argv)
     state->memory = malloc(0x10000);  //16K
 
     // Read files into state[memory]
-    ReadFileMem(state, "Rom/invaders.h", 0);
-    ReadFileMem(state, "Rom/invaders.g", 0x800);
-    ReadFileMem(state, "Rom/invaders.f", 0x1000);
-    ReadFileMem(state, "Rom/invaders.e", 0x1800);
+    ReadFileMem(state, "../Rom/invaders.h", 0);
+    ReadFileMem(state, "../Rom/invaders.g", 0x800);
+    ReadFileMem(state, "../Rom/invaders.f", 0x1000);
+    ReadFileMem(state, "../Rom/invaders.e", 0x1800);
 
-    while (state->pc < 1801)
+    int line = 0;
+//    while (state->pc < 0x3848)
+    while (line < 10500)
     {
         Emulate8080Op(state);
+
+
+        // Print for debugging
+        printf("\t");
+        printf("%c", state->cc.z ? 'z' : '.');
+        printf("%c", state->cc.s ? 's' : '.');
+        printf("%c", state->cc.p ? 'p' : '.');
+        printf("%c", state->cc.cy ? 'c' : '.');
+        printf("%c  ", state->cc.ac ? 'a' : '.');
+        printf("PC $%02x ", state->pc);
+        printf("A $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n", state->a, state->b, state->c,
+               state->d, state->e, state->h, state->l, state->sp);
+        fflush(stdout);
+        line++;
     }
     return 0;
 }
