@@ -33,6 +33,7 @@ void SetFlagsNoCarry(ConditionCodes* cc, uint16_t answer);
 void CallAdr(State8080* state, const unsigned char *opcode);
 void CallConstantAdr(State8080* state, uint8_t adr);
 void Return(State8080* state);
+void SBB_Register(uint8_t register_val, State8080* state);
 
 void UnimplementedInstruction(State8080* state)
 {
@@ -87,7 +88,7 @@ int Emulate8080Op(State8080* state)
             uint8_t a = state->a;
             // bit 7 wraps around to bit 0, everything else goes left
             state->a = ((a & 0x80) >> 7) | (a << 1);
-            state->cc.cy = a & 0x80;
+            state->cc.cy = state->a & 1;
         }
             break;
         case 0x08:  // NOP
@@ -166,7 +167,7 @@ int Emulate8080Op(State8080* state)
             uint8_t a = state->a;
             // bit 0 is prev carry, everything else goes left
             state->a = ((state->cc.cy) >> 7) | (a << 1);
-            state->cc.cy = a & 0x80;
+            state->cc.cy = (a & 0x80) == 0x80;
         }
             break;
         case 0x18:  // NOP
@@ -718,119 +719,88 @@ int Emulate8080Op(State8080* state)
             break;
         case 0x90:  // SUB B
         {
-            // store result in 16 bit answer to check for carry
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->b;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;   // remove extra 8 bits
+            state->cc.cy = state->a < state->b;
+            state->a  -= state->b;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x91:  // SUB C
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->c;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = state->a < state->c;
+            state->a  -= state->c;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x92:  // SUB D
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->d;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = state->a < state->d;
+            state->a  -= state->d;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x93:  // SUB E
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->e;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = state->a < state->e;
+            state->a  -= state->e;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x94:  // SUB H
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->h;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = state->a < state->h;
+            state->a  -= state->h;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x95:  // SUB L
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->l;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = state->a < state->l;
+            state->a  -= state->l;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x96:  // SUB M
         {
             // M is the byte pointed to by SUBress stored in HL
-            uint16_t SUBress = (state->h<<8) | (state->l);  // concat h and l
-            uint16_t answer = (uint16_t) state->a - state->memory[SUBress];
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
+            uint16_t address = (state->h<<8) | (state->l);  // concat h and l
+            state->cc.cy = state->a < state->memory[address];
+            state->a  -= state->memory[address];
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
         case 0x97:  // SUB A
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->a;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = 0;
+            state->a  -= state->a;
+            SetFlagsNoCarry(&state->cc, state->a);
         }
             break;
-        case 0x98:  // 	SBB B
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->b - state->cc.cy;;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+        case 0x98:  // SBB B
+            SBB_Register(state->b, state);
             break;
-        case 0x99:   // SBB C
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->c - state->cc.cy;;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+        case 0x99:  // SBB C
+            SBB_Register(state->c, state);
             break;
-        case 0x9a:   // SBB D
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->d - state->cc.cy;;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+        case 0x9a:  // SBB D
+            SBB_Register(state->d, state);
             break;
         case 0x9b:  // SBB E
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->e - state->cc.cy;;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+            SBB_Register(state->e, state);
             break;
         case 0x9c:  // SBB H
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->h - state->cc.cy;;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+            SBB_Register(state->h, state);
             break;
         case 0x9d:  // SBB L
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->l - state->cc.cy;;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+            SBB_Register(state->l, state);
             break;
         case 0x9e:  // SBB M
         {
-            uint16_t address = (state->h<<8) | (state->l);  // concat h and l
-            uint16_t answer = (uint16_t) state->a - state->memory[address] - state->cc.cy;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
+            uint16_t address = (state->h << 8) | state->l;  // Memory address
+            SBB_Register(state->memory[address], state);
         }
             break;
         case 0x9f:  // SBB A
-        {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->a - state->cc.cy;
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
-        }
+            SBB_Register(state->a, state);
             break;
         case 0xa0:  // ANA B   (A <-A & B)
             state->a &= state->b;
@@ -963,55 +933,54 @@ int Emulate8080Op(State8080* state)
             break;
         case 0xb8:  // CMP B    (A - B)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->b;
-            SetFlags(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->b);
+            state->cc.cy = state->a < state->b;
         }
             break;
         case 0xb9:  // CMP C    (A - C)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->c;
-            SetFlags(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->c);
+            state->cc.cy = state->a < state->c;
         }
             break;
         case 0xba:  // CMP D    (A - D)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->d;
-            SetFlags(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->d);
+            state->cc.cy = state->a < state->d;
         }
             break;
         case 0xbb:  // CMP E    (A - E)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->e;
-            SetFlags(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->e);
+            state->cc.cy = state->a < state->e;
         }
             break;
         case 0xbc:  // CMP H    (A - H)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->h;
-            SetFlags(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->h);
+            state->cc.cy = state->a < state->h;
         }
             break;
         case 0xbd:  // CMP L    (A - L)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->l;
-            SetFlags(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->l);
+            state->cc.cy = state->a < state->l;
         }
             break;
         case 0xbe:  // CMP M    (A - (HL))
         {
             uint16_t address = (state->h << 8) | (state->l);  // concat h and l
-            uint16_t answer = (uint16_t) state->a - (uint16_t) state->memory[address];
-            SetFlags(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - state->memory[address]);
+            state->cc.cy = state->a < state->memory[address];
         }
             break;
         case 0xbf:  // CMP A    (A - A)
-            SetFlags(&state->cc, 0);    // A - A is always 0
+            SetFlagsNoCarry(&state->cc, 0);    // A - A is always 0
+            state->cc.cy = 0;
             break;
         case 0xc0:  // RNZ adr  (if NZ, RET)
             if (state->cc.z == 0)
                 Return(state);
-            else
-                state->pc += 1;
             break;
         case 0xc1:  // POP B    C <- (sp); B <- (sp+1); sp <- sp+2
         {
@@ -1056,8 +1025,6 @@ int Emulate8080Op(State8080* state)
         case 0xc8:  // RZ adr  (if Z, RET)
             if (state->cc.z)
                 Return(state);
-            else
-                state->pc += 1;
             break;
         case 0xc9:  // RET      (PC.lo <- (sp); PC.hi<-(sp+1); SP <- SP+2)
             Return(state);
@@ -1076,8 +1043,41 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 2;
             break;
-        case 0xcd:  // CALL adr ((SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP-2;PC=adr)
-            CallAdr(state, opcode);
+//        case 0xcd:  // CALL adr ((SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP-2;PC=adr)
+//            CallAdr(state, opcode);
+//            break;
+        case 0xcd:                      //CALL address
+
+            if (5 ==  ((opcode[2] << 8) | opcode[1]))
+            {
+                if (state->c == 9)
+                {
+                    uint16_t offset = (state->d<<8) | (state->e);
+                    char *str = &state->memory[offset+3];  //skip the prefix bytes
+                    while (*str != '$')
+                        printf("%c", *str++);
+                    printf("\n");
+                    exit(0);
+                }
+                else if (state->c == 2)
+                {
+                    //saw this in the inspected code, never saw it called
+                    printf ("print char routine called\n");
+                }
+            }
+            else if (0 ==  ((opcode[2] << 8) | opcode[1]))
+            {
+                exit(0);
+            }
+            else
+
+        {
+            uint16_t    ret = state->pc+2;
+            state->memory[state->sp-1] = (ret >> 8) & 0xff;
+            state->memory[state->sp-2] = (ret & 0xff);
+            state->sp = state->sp - 2;
+            state->pc = (opcode[2] << 8) | opcode[1];
+        }
             break;
         case 0xce:  // ACI D8 (A <- A + data + CY)
         {
@@ -1093,8 +1093,6 @@ int Emulate8080Op(State8080* state)
         case 0xd0:  // RNC adr  (if NCY, RET)
             if (state->cc.cy == 0)
                 Return(state);
-            else
-                state->pc += 1;
             break;
         case 0xd1:  // POP D    E <- (sp); D <- (sp+1); sp <- sp+2
         {
@@ -1128,9 +1126,10 @@ int Emulate8080Op(State8080* state)
             break;
         case 0xd6:  // SUI D8 (A <- A - data)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) opcode[1];
-            SetFlags(&state->cc, answer);
-            state->a = answer & 0xff;
+            state->cc.cy = (state->a < opcode[1]);
+            state->a -= opcode[1];
+            SetFlagsNoCarry(&state->cc, state->a);
+
             state->pc++;
         }
             break;
@@ -1140,8 +1139,6 @@ int Emulate8080Op(State8080* state)
         case 0xd8:  // RC adr  (if CY, RET)
             if (state->cc.cy)
                 Return(state);
-            else
-                state->pc += 1;
             break;
         case 0xd9:  // NOP
             break;
@@ -1166,7 +1163,8 @@ int Emulate8080Op(State8080* state)
         case 0xde:  // SBI D8   A <- A - data - CY
         {
             uint16_t answer = (uint16_t) state->a - (uint16_t) opcode[1] - state->cc.cy;
-            SetFlags(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, answer);
+            state->cc.cy = (state->a < (opcode[1] + state->cc.cy));
             state->a = answer & 0xff;
             state->pc++;
         }
@@ -1177,8 +1175,6 @@ int Emulate8080Op(State8080* state)
         case 0xe0:  // RPO  (if PO, RET)
             if (state->cc.p == 0)
                 Return(state);
-            else
-                state->pc += 1;
             break;
         case 0xe1:  // POP B    L <- (sp); H <- (sp+1); sp <- sp+2
         {
@@ -1230,8 +1226,6 @@ int Emulate8080Op(State8080* state)
         case 0xe8:  // RPE  (if PE, RET)
             if (state->cc.p)
                 Return(state);
-            else
-                state->pc += 1;
             break;
         case 0xe9:  // PCHL (PC.hi <- H; PC.lo <- L)
             state->pc = (state->h << 8) | state->l;
@@ -1274,8 +1268,6 @@ int Emulate8080Op(State8080* state)
         case 0xf0:  // RP plus sign  (if P, RET)
             if (state->cc.s == 0)
                 Return(state);
-            else
-                state->pc += 1;
             break;
         case 0xf1:  // POP PSW   flags <- (sp); A <- (sp+1); sp <- sp+2
         {
@@ -1330,8 +1322,6 @@ int Emulate8080Op(State8080* state)
         case 0xf8:  // RM minus sign  (if M, RET)
             if (state->cc.s)
                 Return(state);
-            else
-                state->pc += 1;
             break;
         case 0xf9:  // SPHL SP=HL
             state->sp = (state->h << 8) | state->l;
@@ -1355,8 +1345,8 @@ int Emulate8080Op(State8080* state)
             break;
         case 0xfe:  // CPI D8   (A - data)
         {
-            uint16_t answer = (uint16_t) state->a - (uint16_t) opcode[1];
-            SetFlags(&state->cc, answer);
+            SetFlagsNoCarry(&state->cc, state->a - opcode[1]);
+            state->cc.cy = (state->a < opcode[1]);
             state->pc++;
         }
             break;
@@ -1443,23 +1433,50 @@ void ReadFileMem(State8080* state, char* filename, uint32_t mem_address)
     fclose(f);
 }
 
+void SBB_Register(uint8_t register_val, State8080* state)
+{
+    uint8_t new_carry = state->a < (register_val + state->cc.cy);
+    state->a  -= register_val + state->cc.cy;
+    state->cc.cy = new_carry;
+    SetFlagsNoCarry(&state->cc, state->a);
+}
+
 int main (int argc, char**argv)
 {
     // Initialize states
     State8080* state = calloc(1, sizeof(State8080));
     state->memory = malloc(0x10000);  //16K
 
-    // Read files into state[memory]
-    ReadFileMem(state, "../Rom/invaders.h", 0);
-    ReadFileMem(state, "../Rom/invaders.g", 0x800);
-    ReadFileMem(state, "../Rom/invaders.f", 0x1000);
-    ReadFileMem(state, "../Rom/invaders.e", 0x1800);
+//    // Read files into state[memory]
+//    ReadFileMem(state, "../Rom/invaders.h", 0);
+//    ReadFileMem(state, "../Rom/invaders.g", 0x800);
+//    ReadFileMem(state, "../Rom/invaders.f", 0x1000);
+//    ReadFileMem(state, "../Rom/invaders.e", 0x1800);
+
+    ReadFileMem(state, "../Rom/Test/cpudiag.bin", 0x100);
+
+    //Fix the first instruction to be JMP 0x100
+    state->memory[0]=0xc3;
+    state->memory[1]=0;
+    state->memory[2]=0x01;
+
+    //Fix the stack pointer from 0x6ad to 0x7ad
+    // this 0x06 byte 112 in the code, which is
+    // byte 112 + 0x100 = 368 in memory
+    state->memory[368] = 0x7;
+
+    //Skip DAA test
+    state->memory[0x59c] = 0xc3; //JMP
+    state->memory[0x59d] = 0xc2;
+    state->memory[0x59e] = 0x05;
 
     int line = 0;
-//    while (state->pc < 0x3848)
-    while (line < 10500)
+//    while (state->pc < 0x2000)
+//    while (line < 50000)
+    int done = 0;
+    while (done == 0)
     {
-        Emulate8080Op(state);
+        done = Emulate8080Op(state);
 
 
         // Print for debugging
@@ -1473,7 +1490,7 @@ int main (int argc, char**argv)
         printf("A $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n", state->a, state->b, state->c,
                state->d, state->e, state->h, state->l, state->sp);
         fflush(stdout);
-        line++;
+//        line++;
     }
     return 0;
 }
