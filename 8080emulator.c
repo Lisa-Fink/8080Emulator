@@ -205,7 +205,6 @@ int Emulate8080Op(State8080* state)
             state->pc++;
             break;
         case 0x1f:  // RAR      A = A >> 1; bit 7 = prev bit 7; CY = prev bit 0
-        // TODO: double check this, example uses carry but instruction says prev bit 7
         {
             uint8_t a = state->a;
             state->a = (a & 0x80) | (a >> 1);
@@ -1043,42 +1042,43 @@ int Emulate8080Op(State8080* state)
             else
                 state->pc += 2;
             break;
-//        case 0xcd:  // CALL adr ((SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP-2;PC=adr)
-//            CallAdr(state, opcode);
-//            break;
-        case 0xcd:                      //CALL address
-
-            if (5 ==  ((opcode[2] << 8) | opcode[1]))
-            {
-                if (state->c == 9)
-                {
-                    uint16_t offset = (state->d<<8) | (state->e);
-                    char *str = &state->memory[offset+3];  //skip the prefix bytes
-                    while (*str != '$')
-                        printf("%c", *str++);
-                    printf("\n");
-                    exit(0);
-                }
-                else if (state->c == 2)
-                {
-                    //saw this in the inspected code, never saw it called
-                    printf ("print char routine called\n");
-                }
-            }
-            else if (0 ==  ((opcode[2] << 8) | opcode[1]))
-            {
-                exit(0);
-            }
-            else
-
-        {
-            uint16_t    ret = state->pc+2;
-            state->memory[state->sp-1] = (ret >> 8) & 0xff;
-            state->memory[state->sp-2] = (ret & 0xff);
-            state->sp = state->sp - 2;
-            state->pc = (opcode[2] << 8) | opcode[1];
-        }
+        case 0xcd:  // CALL adr ((SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP-2;PC=adr)
+            CallAdr(state, opcode);
             break;
+//            CALL for cpu diag test
+//        case 0xcd:                      //CALL address
+//
+//            if (5 ==  ((opcode[2] << 8) | opcode[1]))
+//            {
+//                if (state->c == 9)
+//                {
+//                    uint16_t offset = (state->d<<8) | (state->e);
+//                    char *str = &state->memory[offset+3];  //skip the prefix bytes
+//                    while (*str != '$')
+//                        printf("%c", *str++);
+//                    printf("\n");
+//                    exit(0);
+//                }
+//                else if (state->c == 2)
+//                {
+//                    //saw this in the inspected code, never saw it called
+//                    printf ("print char routine called\n");
+//                }
+//            }
+//            else if (0 ==  ((opcode[2] << 8) | opcode[1]))
+//            {
+//                exit(0);
+//            }
+//            else
+//
+//        {
+//            uint16_t    ret = state->pc+2;
+//            state->memory[state->sp-1] = (ret >> 8) & 0xff;
+//            state->memory[state->sp-2] = (ret & 0xff);
+//            state->sp = state->sp - 2;
+//            state->pc = (opcode[2] << 8) | opcode[1];
+//        }
+//            break;
         case 0xce:  // ACI D8 (A <- A + data + CY)
         {
             uint16_t answer = (uint16_t) state->a + (uint16_t) opcode[1] + state->cc.cy;
@@ -1184,7 +1184,6 @@ int Emulate8080Op(State8080* state)
         }
             break;
         case 0xe2:  // JPO  (if PO, PC <- adr)
-        // TODO: check if this and JPE aligns with parity correctly
             if (state->cc.p == 0)
                 state->pc = (opcode[2] << 8) | opcode[1];
             else
@@ -1231,7 +1230,6 @@ int Emulate8080Op(State8080* state)
             state->pc = (state->h << 8) | state->l;
             break;
         case 0xea:  // JPE  (if PE, PC <- adr)
-            // TODO: check if this and JPO aligns with parity correctly
             if (state->cc.p)
                 state->pc = (opcode[2] << 8) | opcode[1];
             else
@@ -1445,40 +1443,36 @@ int main (int argc, char**argv)
 {
     // Initialize states
     State8080* state = calloc(1, sizeof(State8080));
-    state->memory = malloc(0x10000);  //16K
+    state->memory = malloc(0x10000);  // 16K
 
-//    // Read files into state[memory]
-//    ReadFileMem(state, "../Rom/invaders.h", 0);
-//    ReadFileMem(state, "../Rom/invaders.g", 0x800);
-//    ReadFileMem(state, "../Rom/invaders.f", 0x1000);
-//    ReadFileMem(state, "../Rom/invaders.e", 0x1800);
+    // Read files into state[memory]
+    ReadFileMem(state, "../Rom/invaders.h", 0);
+    ReadFileMem(state, "../Rom/invaders.g", 0x800);
+    ReadFileMem(state, "../Rom/invaders.f", 0x1000);
+    ReadFileMem(state, "../Rom/invaders.e", 0x1800);
 
-    ReadFileMem(state, "../Rom/Test/cpudiag.bin", 0x100);
-
-    //Fix the first instruction to be JMP 0x100
-    state->memory[0]=0xc3;
-    state->memory[1]=0;
-    state->memory[2]=0x01;
-
-    //Fix the stack pointer from 0x6ad to 0x7ad
-    // this 0x06 byte 112 in the code, which is
-    // byte 112 + 0x100 = 368 in memory
-    state->memory[368] = 0x7;
-
-    //Skip DAA test
-    state->memory[0x59c] = 0xc3; //JMP
-    state->memory[0x59d] = 0xc2;
-    state->memory[0x59e] = 0x05;
-
+    // CPUdiag test setup
+//    ReadFileMem(state, "../Rom/Test/cpudiag.bin", 0x100);
+//
+//    //Fix the first instruction to be JMP 0x100
+//    state->memory[0]=0xc3;
+//    state->memory[1]=0;
+//    state->memory[2]=0x01;
+//
+//    //Fix the stack pointer from 0x6ad to 0x7ad
+//    // this 0x06 byte 112 in the code, which is
+//    // byte 112 + 0x100 = 368 in memory
+//    state->memory[368] = 0x7;
+//
+//    //Skip DAA test
+//    state->memory[0x59c] = 0xc3; //JMP
+//    state->memory[0x59d] = 0xc2;
+//    state->memory[0x59e] = 0x05;
     int line = 0;
 //    while (state->pc < 0x2000)
-//    while (line < 50000)
-    int done = 0;
-    while (done == 0)
+    while (line < 50000)
     {
-        done = Emulate8080Op(state);
-
-
+        Emulate8080Op(state);
         // Print for debugging
         printf("\t");
         printf("%c", state->cc.z ? 'z' : '.');
@@ -1490,7 +1484,7 @@ int main (int argc, char**argv)
         printf("A $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n", state->a, state->b, state->c,
                state->d, state->e, state->h, state->l, state->sp);
         fflush(stdout);
-//        line++;
+        line++;
     }
     return 0;
 }
