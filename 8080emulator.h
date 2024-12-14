@@ -2,7 +2,7 @@
 #define INC_8080EMULATOR_8080EMULATOR_H
 
 #include <stdint.h>
-
+extern unsigned char cycles8080[];
 typedef struct ConditionCodes {
     uint8_t    z:1;
     uint8_t    s:1;

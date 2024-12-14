@@ -178,10 +178,10 @@ int Emulate8080Op(State8080* state)
             state->e = opcode[1];
             state->pc++;
             break;
-        case 0x1f:  // RAR      A = A >> 1; bit 7 = prev bit 7; CY = prev bit 0
+        case 0x1f:  // RAR      A = A >> 1; bit 7 = prev cy; CY = prev bit 0
         {
             uint8_t a = state->a;
-            state->a = (a & 0x80) | (a >> 1);
+            state->a = (state->cc.cy << 7) | (a >> 1);
             state->cc.cy = a & 1;
         }
             break;
@@ -1054,7 +1054,6 @@ int Emulate8080Op(State8080* state)
                 state->pc += 2;
             break;
         case 0xd3:  // OUT D8    special
-            // TODO: implement this later
             state->pc++;
             break;
         case 0xd4:  // CNC adr  (if NCY, CALL adr)
@@ -1095,7 +1094,6 @@ int Emulate8080Op(State8080* state)
                 state->pc += 2;
             break;
         case 0xdb:  // IN D8    special
-            // TODO: implement this later
             state->pc++;
             break;
         case 0xdc:  // CC adr  (if CY, CALL adr)
@@ -1367,3 +1365,26 @@ void SBB_Register(uint8_t register_val, State8080* state)
     state->cc.cy = new_carry;
     SetFlagsNoCarry(&state->cc, state->a);
 }
+
+
+unsigned char cycles8080[] = {
+        4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x00..0x0f
+        4, 10, 7, 5, 5, 5, 7, 4, 4, 10, 7, 5, 5, 5, 7, 4, //0x10..0x1f
+        4, 10, 16, 5, 5, 5, 7, 4, 4, 10, 16, 5, 5, 5, 7, 4, //etc
+        4, 10, 13, 5, 10, 10, 10, 4, 4, 10, 13, 5, 5, 5, 7, 4,
+
+        5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5, //0x40..0x4f
+        5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5,
+        5, 5, 5, 5, 5, 5, 7, 5, 5, 5, 5, 5, 5, 5, 7, 5,
+        7, 7, 7, 7, 7, 7, 7, 7, 5, 5, 5, 5, 5, 5, 7, 5,
+
+        4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4, //0x80..8x4f
+        4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+        4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+        4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
+
+        11, 10, 10, 10, 17, 11, 7, 11, 11, 10, 10, 10, 10, 17, 7, 11, //0xc0..0xcf
+        11, 10, 10, 10, 17, 11, 7, 11, 11, 10, 10, 10, 10, 17, 7, 11,
+        11, 10, 10, 18, 17, 11, 7, 11, 11, 5, 10, 5, 17, 17, 7, 11,
+        11, 10, 10, 4, 17, 11, 7, 11, 11, 5, 10, 4, 17, 17, 7, 11,
+};
