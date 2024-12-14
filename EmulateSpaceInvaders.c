@@ -86,6 +86,46 @@ void MachineOUT(uint8_t port, Ports* ports, State8080* state)
     }
 }
 
+void draw_screen(State8080* state, SDL_Renderer* renderer, int interrupt_num, SDL_Surface* surface) {
+    uint8_t *video_memory = &state->memory[0x2400];  // Starting address for video memory
+    int start_y = (interrupt_num == 0) ? 0 : 112;   // Top half or bottom half
+    int end_y = (interrupt_num == 0) ? 112 : 224;
+
+
+
+
+    uint32_t color;
+    for (int y = start_y; y < end_y; y++) {
+        for (int x = 0; x < 256; x++) {
+            int byte_offset = y * 32 + x / 8;
+            int bit_offset = x % 8;
+
+            color = (video_memory[byte_offset] & (1 << bit_offset)) ? 0xFFFFFFFF : 0x00000000;
+            ((uint32_t*)surface->pixels)[(255 - x) * 224 + y] = color;
+        }
+    }
+
+
+    if (interrupt_num == 1) {
+        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
+        if (!texture) {
+            printf("SDL_CreateTexture Error: %s\n", SDL_GetError());
+            return;
+        }
+
+        SDL_Rect destRect = { 0, 0, 224 * 3, 256 * 3};
+        SDL_RenderCopy(renderer, texture, NULL, &destRect);
+
+        // Clean up the texture
+        SDL_DestroyTexture(texture);
+
+
+        SDL_RenderPresent(renderer);
+    }
+}
+
+
 void GenerateInterrupt(State8080* state, int interrupt_num)
 {
     // PUSH PC
@@ -99,12 +139,15 @@ void GenerateInterrupt(State8080* state, int interrupt_num)
     state->int_enable = 0;  // DI
 }
 
-double HandleInterrupt(State8080* state, Uint32 lastInterrupt, uint8_t* interrupt_num)
+double HandleInterrupt(State8080* state, Uint32 lastInterrupt, uint8_t* interrupt_num, SDL_Renderer* renderer, SDL_Surface* surface)
 {
+    if (state->int_enable == 0) return lastInterrupt;
     Uint32 currentTime = SDL_GetTicks64();
-    if ((currentTime - lastInterrupt) > (16) && state->int_enable)
+    if ((currentTime - lastInterrupt) > (16))
     {
         GenerateInterrupt(state, *interrupt_num + 1);
+        draw_screen(state, renderer, *interrupt_num, surface);
+
         *interrupt_num ^= 1;    // toggles between 0-1
         return currentTime;
     }
@@ -125,7 +168,13 @@ int main(int argc, char**argv)
     // Create a window
     SDL_Window* window = SDL_CreateWindow("8080 Emulator",
                                           SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                          800, 600, SDL_WINDOW_SHOWN);
+                                          256 * 3, 224 * 3, SDL_WINDOW_SHOWN);
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, 224, 256, 32, SDL_PIXELFORMAT_RGBA8888);
+    if (!surface) {
+        printf("SDL_CreateSurface Error: %s\n", SDL_GetError());
+        return 1;
+    }
 
     // Initialize states
     State8080* state = calloc(1, sizeof(State8080));
@@ -145,13 +194,22 @@ int main(int argc, char**argv)
 
     int line = 0;
 //    while (state->pc < 0x2000)
-    while (line < 200000)
+//    while (line < 2000000)
+    SDL_Event event;
+    int running = 1;
+    while (running == 1)
     {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                running = 0;
+            }
+        }
 
-        last_interrupt = HandleInterrupt(state, last_interrupt, &interrupt_num);
+        last_interrupt = HandleInterrupt(state, last_interrupt, &interrupt_num, renderer, surface);
+
 
         unsigned char *opcode = &state->memory[state->pc];
-        Disassemble8080Op(state->memory, state->pc);
+//        Disassemble8080Op(state->memory, state->pc);
 
         // Game has specific function for IN/OUT, which isn't in the general emulator function
         // IN
@@ -174,17 +232,17 @@ int main(int argc, char**argv)
 
 
 
-        // Print for debugging
-        printf("\t");
-        printf("%c", state->cc.z ? 'z' : '.');
-        printf("%c", state->cc.s ? 's' : '.');
-        printf("%c", state->cc.p ? 'p' : '.');
-        printf("%c", state->cc.cy ? 'c' : '.');
-        printf("%c  ", state->cc.ac ? 'a' : '.');
-        printf("PC $%02x ", state->pc);
-        printf("A $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n", state->a, state->b, state->c,
-               state->d, state->e, state->h, state->l, state->sp);
-        fflush(stdout);
+//        // Print for debugging
+//        printf("\t");
+//        printf("%c", state->cc.z ? 'z' : '.');
+//        printf("%c", state->cc.s ? 's' : '.');
+//        printf("%c", state->cc.p ? 'p' : '.');
+//        printf("%c", state->cc.cy ? 'c' : '.');
+//        printf("%c  ", state->cc.ac ? 'a' : '.');
+//        printf("PC $%02x ", state->pc);
+//        printf("A $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n", state->a, state->b, state->c,
+//               state->d, state->e, state->h, state->l, state->sp);
+//        fflush(stdout);
         line++;
     }
     return 0;
