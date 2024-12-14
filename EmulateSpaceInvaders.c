@@ -1,12 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <time.h>
 
 #include <SDL2/SDL.h>
 
 #include "8080emulator.h"
-#include "Disassembler/disassembler.h"
+
 
 void ReadFileMem(State8080* state, char* filename, uint32_t mem_address)
 {
@@ -35,7 +34,7 @@ typedef struct Ports {
 void InitPorts(Ports* ports)
 {
     ports->input0 = 0b00001110; // Bits 1, 2, 3 are always 1; other inputs are default 0.
-    ports->input1 = 0b00001100; // Bit 3 is always 1; all others default to 0.
+    ports->input1 = 0b00001000; // Bit 3 is always 1; all others default to 0.
     ports->input2 = 0b00000000;
 
     ports->shift_register = 0x0000;
@@ -82,6 +81,79 @@ void MachineOUT(uint8_t port, Ports* ports, State8080* state)
             break;
         case 6:
             ports->output6 = state->a;
+            break;
+    }
+}
+
+void KeyDown(SDL_KeyCode key, Ports* ports)
+{
+    switch (key) {
+        case SDLK_c:        // COIN
+            ports->input1 |= 0x1;
+            break;
+        case SDLK_RETURN:   // 2P START
+            printf("return");
+            ports->input1 |= 0x02;
+            break;
+        case SDLK_1:        // 1P START
+            ports->input1 |= 0x04;
+            break;
+        case SDLK_SPACE:    // 1P SHOOT
+            ports->input1 |= 0x10;
+            break;
+        case SDLK_a:        // 1P LEFT
+            ports->input1 |= 0x20;
+            break;
+        case SDLK_d:        // 1P RIGHT
+            ports->input1 |= 0x40;
+            break;
+
+        case SDLK_UP:       // 2P SHOOT
+            ports->input2 |= 0x10;
+            break;
+        case SDLK_LEFT:     // 2P LEFT
+            ports->input2 |= 0x20;
+            break;
+        case SDLK_RIGHT:     // 2P RIGHT
+            ports->input2 |= 0x40;
+            break;
+        default:
+            break;
+    }
+}
+
+void KeyUp(SDL_KeyCode key, Ports* ports)
+{
+    switch (key) {
+        case SDLK_c:
+            ports->input1 &= ~0x1;
+            break;
+        case SDLK_RETURN:
+            ports->input1 &= ~0x2;
+            break;
+        case SDLK_1:
+            ports->input1 &= ~0x4;
+            break;
+        case SDLK_SPACE:
+            ports->input1 &= ~0x10;
+            break;
+        case SDLK_a:
+            ports->input1 &= ~0x20;
+            break;
+        case SDLK_d:
+            ports->input1 &= ~0x40;
+            break;
+
+        case SDLK_UP:       // 2P SHOOT
+            ports->input2 &= ~0x10;
+            break;
+        case SDLK_LEFT:     // 2P LEFT
+            ports->input2 &= ~0x20;
+            break;
+        case SDLK_RIGHT:     // 2P RIGHT
+            ports->input2 &= ~0x40;
+            break;
+        default:
             break;
     }
 }
@@ -187,10 +259,11 @@ int main(int argc, char**argv)
     uint8_t interrupt_num = 0;
 
     // Read files into state[memory]
-    ReadFileMem(state, "../Rom/invaders.h", 0);
-    ReadFileMem(state, "../Rom/invaders.g", 0x800);
-    ReadFileMem(state, "../Rom/invaders.f", 0x1000);
-    ReadFileMem(state, "../Rom/invaders.e", 0x1800);
+    ReadFileMem(state, "../Rom/invaders", 0);
+//    ReadFileMem(state, "../Rom/invaders.h", 0);
+//    ReadFileMem(state, "../Rom/invaders.g", 0x800);
+//    ReadFileMem(state, "../Rom/invaders.f", 0x1000);
+//    ReadFileMem(state, "../Rom/invaders.e", 0x1800);
 
     int line = 0;
 //    while (state->pc < 0x2000)
@@ -202,6 +275,14 @@ int main(int argc, char**argv)
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 running = 0;
+            }
+            if (event.type == SDL_KEYDOWN)
+            {
+                KeyDown(event.key.keysym.sym, ports);
+            }
+            if (event.type == SDL_KEYUP)
+            {
+                KeyUp(event.key.keysym.sym, ports);
             }
         }
 
