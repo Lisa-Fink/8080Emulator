@@ -217,8 +217,14 @@ int Emulate8080Op(State8080* state)
             state->pc++;
             break;
         case 0x27:  // DAA special
-            // TODO: lookup?
-            UnimplementedInstruction(state);
+            if ((state->a & 0xf) > 9)
+                state->a += 6;
+            if ((state->a & 0xf0) > 0x90)
+            {
+                uint16_t answer = (uint16_t) state->a + 0x60;
+                state->a = answer & 0xff;
+                SetFlags(&state->cc, answer);
+            }
             break;
         case 0x28:  // NOP
             break;
