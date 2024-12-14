@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "Disassembler/disassembler.h"
 #include "8080emulator.h"
 
 
@@ -22,8 +21,6 @@ void UnimplementedInstruction(State8080* state)
 int Emulate8080Op(State8080* state)
 {
     unsigned char *opcode = &state->memory[state->pc];
-
-    Disassemble8080Op(state->memory, state->pc);
 
     // default inc pc
     // do this BEFORE processing

@@ -1,7 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <time.h>
+
+#include <SDL2/SDL.h>
+
 #include "8080emulator.h"
+#include "Disassembler/disassembler.h"
 
 void ReadFileMem(State8080* state, char* filename, uint32_t mem_address)
 {
@@ -30,7 +35,7 @@ typedef struct Ports {
 void InitPorts(Ports* ports)
 {
     ports->input0 = 0b00001110; // Bits 1, 2, 3 are always 1; other inputs are default 0.
-    ports->input1 = 0b00001000; // Bit 3 is always 1; all others default to 0.
+    ports->input1 = 0b00001100; // Bit 3 is always 1; all others default to 0.
     ports->input2 = 0b00000000;
 
     ports->shift_register = 0x0000;
@@ -81,16 +86,56 @@ void MachineOUT(uint8_t port, Ports* ports, State8080* state)
     }
 }
 
-
-
-int main (int argc, char**argv)
+void GenerateInterrupt(State8080* state, int interrupt_num)
 {
+    // PUSH PC
+    state->memory[state->sp-1] = (state->pc & 0xFF00) >> 8;
+    state->memory[state->sp-2] = state->pc & 0xff;
+    state->sp = state->sp - 2;
+
+    // Set the PC to the low memory vector
+    state->pc = 8 * interrupt_num;
+
+    state->int_enable = 0;  // DI
+}
+
+double HandleInterrupt(State8080* state, Uint32 lastInterrupt, uint8_t* interrupt_num)
+{
+    Uint32 currentTime = SDL_GetTicks64();
+    if ((currentTime - lastInterrupt) > (16) && state->int_enable)
+    {
+        GenerateInterrupt(state, *interrupt_num + 1);
+        *interrupt_num ^= 1;    // toggles between 0-1
+        return currentTime;
+    }
+    return lastInterrupt;
+}
+
+
+
+
+int main(int argc, char**argv)
+{
+    // Initialize SDL
+    if (SDL_Init(SDL_INIT_TIMER) != 0) {
+        printf("SDL_Init Error: %s\n", SDL_GetError());
+        return 1;
+    }
+
+    // Create a window
+    SDL_Window* window = SDL_CreateWindow("8080 Emulator",
+                                          SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                          800, 600, SDL_WINDOW_SHOWN);
+
     // Initialize states
     State8080* state = calloc(1, sizeof(State8080));
     state->memory = malloc(0x10000);  // 16K
 
     Ports* ports = calloc(1, sizeof(Ports));
     InitPorts(ports);
+
+    Uint32 last_interrupt = SDL_GetTicks64();
+    uint8_t interrupt_num = 0;
 
     // Read files into state[memory]
     ReadFileMem(state, "../Rom/invaders.h", 0);
@@ -100,9 +145,13 @@ int main (int argc, char**argv)
 
     int line = 0;
 //    while (state->pc < 0x2000)
-    while (line < 50000)
+    while (line < 200000)
     {
+
+        last_interrupt = HandleInterrupt(state, last_interrupt, &interrupt_num);
+
         unsigned char *opcode = &state->memory[state->pc];
+        Disassemble8080Op(state->memory, state->pc);
 
         // Game has specific function for IN/OUT, which isn't in the general emulator function
         // IN
@@ -121,6 +170,7 @@ int main (int argc, char**argv)
         }
         else
             Emulate8080Op(state);
+
 
 
 
