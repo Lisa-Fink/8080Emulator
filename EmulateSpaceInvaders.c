@@ -59,7 +59,7 @@ void MachineIN(uint8_t port, Ports* ports, State8080* state)
             break;
         case 3:
             // read shift register with shifted amount
-            state->a = ports->shift_register >> (8 - ports->shift_amount);
+            state->a = ((ports->shift_register >> (8 - ports->shift_amount)) & 0xff);
             break;
     }
 }
@@ -215,7 +215,7 @@ double HandleInterrupt(State8080* state, Uint32 lastInterrupt, uint8_t* interrup
 {
     if (state->int_enable == 0) return lastInterrupt;
     Uint32 currentTime = SDL_GetTicks64();
-    if ((currentTime - lastInterrupt) > (16))
+    if ((currentTime - lastInterrupt) > (8))
     {
         GenerateInterrupt(state, *interrupt_num + 1);
         draw_screen(state, renderer, *interrupt_num, surface);
@@ -226,7 +226,38 @@ double HandleInterrupt(State8080* state, Uint32 lastInterrupt, uint8_t* interrup
     return lastInterrupt;
 }
 
+int RunCPUCycles(State8080* state, int last_processing, Ports* ports)
+{
+    // Stay here for a few cycles to keep up
+    int cycles_per_frame = 3000;
+    int elapsed_time = (int) SDL_GetTicks64() - last_processing;
+    int cycles = (int) (elapsed_time * cycles_per_frame);
+    unsigned char *opcode;
+    if (cycles == 0) return last_processing;
+    while (cycles > 0)
+    {
+        opcode = &state->memory[state->pc];
+//        Disassemble8080Op(state->memory, state->pc);
 
+        // Game has specific function for IN/OUT, which isn't in the general emulator function
+        // IN
+        if (*opcode == 0xdb) {
+            uint8_t port = opcode[1];
+            MachineIN(port, ports, state);
+            state->pc += 2;
+        }
+        // OUT
+        else if (*opcode == 0xd3) {
+            uint8_t port = opcode[1];
+            MachineOUT(port, ports, state);
+            state->pc += 2;
+        } else
+            Emulate8080Op(state);
+        cycles -= cycles8080[*opcode];
+    }
+
+    return (int) SDL_GetTicks64();
+}
 
 
 int main(int argc, char**argv)
@@ -240,7 +271,7 @@ int main(int argc, char**argv)
     // Create a window
     SDL_Window* window = SDL_CreateWindow("8080 Emulator",
                                           SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                          256 * 3, 224 * 3, SDL_WINDOW_SHOWN);
+                                          224 * 3, 256 * 3, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, 224, 256, 32, SDL_PIXELFORMAT_RGBA8888);
     if (!surface) {
@@ -256,6 +287,7 @@ int main(int argc, char**argv)
     InitPorts(ports);
 
     Uint32 last_interrupt = SDL_GetTicks64();
+    Uint32 last_processing = last_interrupt;
     uint8_t interrupt_num = 0;
 
     // Read files into state[memory]
@@ -265,9 +297,6 @@ int main(int argc, char**argv)
 //    ReadFileMem(state, "../Rom/invaders.f", 0x1000);
 //    ReadFileMem(state, "../Rom/invaders.e", 0x1800);
 
-    int line = 0;
-//    while (state->pc < 0x2000)
-//    while (line < 2000000)
     SDL_Event event;
     int running = 1;
     while (running == 1)
@@ -286,32 +315,8 @@ int main(int argc, char**argv)
             }
         }
 
-        last_interrupt = HandleInterrupt(state, last_interrupt, &interrupt_num, renderer, surface);
-
-
-        unsigned char *opcode = &state->memory[state->pc];
-//        Disassemble8080Op(state->memory, state->pc);
-
-        // Game has specific function for IN/OUT, which isn't in the general emulator function
-        // IN
-        if (*opcode == 0xdb)
-        {
-            uint8_t port = opcode[1];
-            MachineIN(port, ports, state);
-            state->pc += 2;
-        }
-        // OUT
-        else if (*opcode == 0xd3)
-        {
-            uint8_t port = opcode[1];
-            MachineOUT(port, ports, state);
-            state->pc += 2;
-        }
-        else
-            Emulate8080Op(state);
-
-
-
+        last_interrupt = (int) HandleInterrupt(state, last_interrupt, &interrupt_num, renderer, surface);
+        last_processing = RunCPUCycles(state, (int) last_processing, ports);
 
 //        // Print for debugging
 //        printf("\t");
@@ -324,7 +329,6 @@ int main(int argc, char**argv)
 //        printf("A $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP %04x\n", state->a, state->b, state->c,
 //               state->d, state->e, state->h, state->l, state->sp);
 //        fflush(stdout);
-        line++;
     }
     return 0;
 }
